@@ -8,35 +8,29 @@ th started $JOB_ID
 
 # --------------------------------------------
 
-MASTER_IMAGE={{.Master.Path}}{{.Master.Name}}{{.Master.TmpDir}}$JOB_ID
+# unpack image
+IMAGE={{.Cluster.Path}}{{.Cluster.LocalData}}$JOB_ID
+# tmp store results
+TMPDIR={{.Cluster.Path}}{{.Cluster.LocalScratch}}$JOB_ID
+# artifacts to be uploaded to cloud
+ARTIFACTS={{.Cluster.Path}}{{.Cluster.GlobalScratch}}$JOB_ID
 
-ch-convert -i docker -o dir {{.Master.Image}} $MASTER_IMAGE
+# srun
+ch-convert -i docker -o dir {{.Image}} $IMAGE
 
-{{range .Master.PreScripts -}}
-    ch-run $MASTER_IMAGE -- {{.}}
+{{range .User.PreScripts -}}
+    ch-run $IMAGE -- {{.}}
 {{end}}
 
-{{range .Nodes -}}
+ch-run \
+    --bind=$TMPDIR:{{.User.TmpDir}} \
+    {{range $src, $dst := .User.Artifacts -}}
+        --bind=$ARTIFACTS/{{$src}}:{{$dst}} \
+    {{end -}}
+    $IMAGE -- {{.User.JobScript}}
 
-    workspace={{.Path}}{{.Name}}{{.TmpDir}}$JOB_ID
-
-    IMAGE=$workspace/image
-    TMP=$workspace/tmp
-    ARTIFACTS=$workspace/artifacts
-
-    ch-convert -i docker -o dir {{.Image}} $IMAGE
-
-    ch-run \
-        --bind=$TMP:{{.Scratch}} \
-        {{range $src, $dst := .Artifacts -}}
-            --bind=$ARTIFACTS/{{$src}}:{{$dst}} \
-        {{end -}}
-        $IMAGE -- {{.Script}}
-
-{{end}}
-
-{{range .Master.PostScripts -}}
-    ch-run $MASTER_IMAGE -- {{.}}
+{{range .User.PostScripts -}}
+    ch-run $IMAGE -- {{.}}
 {{end}}
 
 # --------------------------------------------

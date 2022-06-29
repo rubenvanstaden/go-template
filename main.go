@@ -1,35 +1,35 @@
 package main
 
 import (
-	"log"
 	"os"
+	"log"
 	"text/template"
 )
 
 var temp *template.Template
 
-type MasterNode struct {
+type ClusterConfig struct {
+    Path          string
+    GlobalData    string
+    GlobalScratch string
+    LocalData     string
+    LocalScratch  string
+}
+
+type UserConfig struct {
     Path        string
     Name        string
     Image       string
     TmpDir      string
+    Artifacts   map[string]string
     PreScripts  []string
+    JobScript   string
     PostScripts []string
 }
 
-type ComputeNode struct {
-    Path      string
-    Name      string
-    Image     string
-    TmpDir    string
-    Script    string
-    Scratch   string
-    Artifacts map[string]string
-}
-
-type Data struct {
-    Master MasterNode
-    Nodes  []ComputeNode
+type Config struct {
+    Cluster ClusterConfig
+    User    UserConfig
 }
 
 func init() {
@@ -38,46 +38,48 @@ func init() {
 
 func main() {
 
-    master := MasterNode{
-        Path: "/var/tmp/cluster/",
-        Name: "master",
-        Image: "mongo:latest",
-        TmpDir: "/scratch/local/",
-        PreScripts: []string{"echo 'run pre-script...'"},
-        PostScripts: []string{"echo 'run post-script...'"},
+    variables := map[string]string{
+        "TMPDIR": "/var/tmp/scratch",
     }
 
+    // artifacts are automatically mount to SCRATCH
     artifacts := map[string]string{
         "cfd-results": "/var/tmp/cfd-results",
         "em-results": "/var/tmp/em-results",
     }
 
-    node1 := ComputeNode{
-        Path: "/var/tmp/cluster/",
-        Name: "node1",
+    cluster := ClusterConfig{
+        Path: "/var/tmp/cluster",
+
+        GlobalData: "/share/thunderhead/data",
+
+        // - $GLOBAL_SCRATCH/<JOB_ID>/cfd-results
+        // - $GLOBAL_SCRATCH/<JOB_ID>/em-results
+        GlobalScratch: "/share/thunderhead/scratch",
+
+        // - $LOCAL_DATA/<JOB_ID>
+        LocalData:  "/local/thunderhead/data",
+
+        // - $LOCAL_SCRATCH/<JOB_ID>
+        LocalScratch:  "/local/thunderhead/scratch",
+    }
+
+    user := UserConfig{
+        Name: "node",
         Image: "mongo:latest",
-        TmpDir: "/scratch/local/",
-        Script: "hello/hello.sh",
-        Scratch: "/var/tmp/scratch",
+        TmpDir: variables["TMPDIR"],
         Artifacts: artifacts,
+        PreScripts: []string{"echo 'run pre-script...'"},
+        JobScript: "hello/hello.sh",
+        PostScripts: []string{"echo 'run post-script...'"},
     }
 
-    node2 := ComputeNode{
-        Path: "/var/tmp/cluster/",
-        Name: "node2",
-        Image: "mongo:latest",
-        TmpDir: "/scratch/local/",
-        Script: "hello/hello.sh",
-        Scratch: "/var/tmp/scratch",
-        Artifacts: artifacts,
+    config := Config{
+        Cluster: cluster,
+        User:    user,
     }
 
-    data := Data{
-        Master: master,
-        Nodes:  []ComputeNode{node1, node2},
-    }
-
-    err := temp.Execute(os.Stdout, data)
+    err := temp.Execute(os.Stdout, config)
     if err != nil {
         log.Fatalln(err)
     }
